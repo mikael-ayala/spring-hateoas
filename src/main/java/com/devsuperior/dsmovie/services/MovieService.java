@@ -3,6 +3,7 @@ package com.devsuperior.dsmovie.services;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
+import com.devsuperior.dsmovie.controllers.MovieController;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -22,60 +23,69 @@ import jakarta.persistence.EntityNotFoundException;
 @Service
 public class MovieService {
 
-	@Autowired
-	private MovieRepository repository;
+    @Autowired
+    private MovieRepository repository;
 
-	@Transactional(readOnly = true)
-	public Page<MovieDTO> findAll(Pageable pageable) {
-		Page<MovieEntity> result = repository.findAll(pageable);
-		Page<MovieDTO> page = result.map(x -> new MovieDTO(x));
-		return page;
-	}
+    @Transactional(readOnly = true)
+    public Page<MovieDTO> findAll(Pageable pageable) {
+        Page<MovieEntity> result = repository.findAll(pageable);
+        Page<MovieDTO> page = result
+                .map(x -> new MovieDTO(x)
+                        .add(linkTo(methodOn(MovieController.class).findAll(null)).withSelfRel())
+                        .add(linkTo(methodOn(MovieController.class).findById(x.getId())).withRel("Get movie by id")));
+        return page;
+    }
 
-	@Transactional(readOnly = true)
-	public MovieDTO findById(Long id) {
-		MovieEntity result = repository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Recurso não encontrado"));
-		return new MovieDTO(result);
-	}
+    @Transactional(readOnly = true)
+    public MovieDTO findById(Long id) {
+        MovieEntity result = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Recurso não encontrado"));
+        MovieDTO dto = new MovieDTO(result)
+                .add(linkTo(methodOn(MovieController.class).findById(id)).withSelfRel())
+                .add(linkTo(methodOn(MovieController.class).findAll(null)).withRel("All movies"))
+                .add(linkTo(methodOn(MovieController.class).update(id, null)).withRel("Update movie by id"))
+                .add(linkTo(methodOn(MovieController.class).delete(id)).withRel("Delete movie by id"));
+        return dto;
+    }
 
-	@Transactional
-	public MovieDTO insert(MovieDTO dto) {
-		MovieEntity entity = new MovieEntity();
-		copyDtoToEntity(dto, entity);
-		entity = repository.save(entity);
-		return new MovieDTO(entity);
-	}
+    @Transactional
+    public MovieDTO insert(MovieDTO dto) {
+        MovieEntity entity = new MovieEntity();
+        copyDtoToEntity(dto, entity);
+        entity = repository.save(entity);
+        return new MovieDTO(entity)
+                .add(linkTo(methodOn(MovieController.class).findById(dto.getId())).withRel("Get movie by id"));
+    }
 
-	@Transactional
-	public MovieDTO update(Long id, MovieDTO dto) {
-		try {
-			MovieEntity entity = repository.getReferenceById(id);
-			copyDtoToEntity(dto, entity);
-			entity = repository.save(entity);
-			return new MovieDTO(entity);
-		} catch (EntityNotFoundException e) {
-			throw new ResourceNotFoundException("Recurso não encontrado");
-		}
-	}
+    @Transactional
+    public MovieDTO update(Long id, MovieDTO dto) {
+        try {
+            MovieEntity entity = repository.getReferenceById(id);
+            copyDtoToEntity(dto, entity);
+            entity = repository.save(entity);
+            return new MovieDTO(entity)
+                    .add(linkTo(methodOn(MovieController.class).findById(dto.getId())).withRel("Get movie by id"));
+        } catch (EntityNotFoundException e) {
+            throw new ResourceNotFoundException("Recurso não encontrado");
+        }
+    }
 
-	@Transactional(propagation = Propagation.SUPPORTS)
-	public void delete(Long id) {
-		if (!repository.existsById(id)) {
-			throw new ResourceNotFoundException("Recurso não encontrado");
-		}
-		try {
-	        repository.deleteById(id);    		
-		}
-	    	catch (DataIntegrityViolationException e) {
-	        	throw new DatabaseException("Falha de integridade referencial");
-	   	}
-	}
+    @Transactional(propagation = Propagation.SUPPORTS)
+    public void delete(Long id) {
+        if (!repository.existsById(id)) {
+            throw new ResourceNotFoundException("Recurso não encontrado");
+        }
+        try {
+            repository.deleteById(id);
+        } catch (DataIntegrityViolationException e) {
+            throw new DatabaseException("Falha de integridade referencial");
+        }
+    }
 
-	private void copyDtoToEntity(MovieDTO dto, MovieEntity entity) {
-		entity.setTitle(dto.getTitle());
-		entity.setScore(dto.getScore());
-		entity.setCount(dto.getCount());
-		entity.setImage(dto.getImage());
-	}
+    private void copyDtoToEntity(MovieDTO dto, MovieEntity entity) {
+        entity.setTitle(dto.getTitle());
+        entity.setScore(dto.getScore());
+        entity.setCount(dto.getCount());
+        entity.setImage(dto.getImage());
+    }
 }
